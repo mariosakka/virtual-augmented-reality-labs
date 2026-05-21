@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Laboratory 6 - A-Frame AR</title>
+
+    <!-- A-Frame -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+    <!-- AR.js for A-Frame -->
+    <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
+
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        overscroll-behavior: none;
+        touch-action: none;
+      }
+
+      body {
+        position: fixed;
+        inset: 0;
+      }
+
+      a-scene {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+      }
+
+      canvas {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+      }
+
+      video,
+      #arjs-video {
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        width: 100% !important;
+        height: 100% !important;
+        min-width: 100% !important;
+        min-height: 100% !important;
+        object-fit: cover !important;
+        transform: translate(-50%, -50%) !important;
+        transform-origin: center center !important;
+      }
+    </style>
+
+    <script>
+      function resizeArView() {
+        const width = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+        const height = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+        const scene = document.querySelector("a-scene");
+        const renderer = scene && scene.renderer;
+        const camera = scene && scene.camera;
+
+        if (renderer) {
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+          renderer.setSize(width, height, true);
+        }
+
+        if (camera) {
+          camera.aspect = width / height;
+          camera.updateProjectionMatrix();
+        }
+      }
+
+      window.addEventListener("load", resizeArView);
+      window.addEventListener("resize", resizeArView);
+      window.addEventListener("orientationchange", () => setTimeout(resizeArView, 300));
+      document.addEventListener("DOMContentLoaded", () => {
+        const scene = document.querySelector("a-scene");
+        if (!scene) return;
+        scene.addEventListener("loaded", resizeArView);
+        scene.addEventListener("render-target-loaded", resizeArView);
+        [250, 750, 1500, 3000].forEach((delay) => setTimeout(resizeArView, delay));
+      });
+
+      AFRAME.registerComponent("rgb-pulse", {
+        tick: function (time) {
+          const hue = (time * 0.08) % 360;
+          this.el.setAttribute("material", "color", `hsl(${hue}, 100%, 55%)`);
+        }
+      });
+
+      AFRAME.registerComponent("shape-cycle", {
+        init: function () {
+          const shapes = [
+            { primitive: "box", width: 0.8, height: 0.8, depth: 0.8 },
+            { primitive: "sphere", radius: 0.48 },
+            { primitive: "cone", radiusBottom: 0.5, radiusTop: 0, height: 0.9 },
+            { primitive: "cylinder", radius: 0.45, height: 0.8 }
+          ];
+          let index = 0;
+
+          this.el.addEventListener("click", () => {
+            index = (index + 1) % shapes.length;
+            this.el.setAttribute("geometry", shapes[index]);
+          });
+        }
+      });
+
+      AFRAME.registerComponent("gltf-orange", {
+        init: function () {
+          this.el.addEventListener("model-loaded", () => {
+            this.el.object3D.traverse((node) => {
+              if (!node.isMesh) return;
+              node.material = node.material.clone();
+              node.material.color.set("#ff8a1c");
+              node.material.needsUpdate = true;
+            });
+          });
+        }
+      });
+
+      AFRAME.registerComponent("meow-on-click", {
+        init: function () {
+          const playMeow = (event) => {
+            if (event) event.stopPropagation();
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const context = new AudioContext();
+            const oscillator = context.createOscillator();
+            const gain = context.createGain();
+
+            if (context.state === "suspended") {
+              context.resume();
+            }
+
+            oscillator.type = "sine";
+            oscillator.frequency.setValueAtTime(720, context.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(420, context.currentTime + 0.18);
+            oscillator.frequency.exponentialRampToValueAtTime(620, context.currentTime + 0.36);
+            gain.gain.setValueAtTime(0.0001, context.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.35, context.currentTime + 0.04);
+            gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.42);
+
+            oscillator.connect(gain);
+            gain.connect(context.destination);
+            oscillator.start();
+            oscillator.stop(context.currentTime + 0.45);
+          };
+
+          this.el.addEventListener("click", playMeow);
+          this.el.addEventListener("touchstart", playMeow);
+        }
+      });
+
+      AFRAME.registerComponent("toy-flips-cat", {
+        schema: { target: { type: "selector" } },
+        init: function () {
+          const flipCat = (event) => {
+            if (event) event.stopPropagation();
+            const cat = this.data.target;
+            if (!cat) return;
+
+            cat.removeAttribute("animation__flip");
+            cat.setAttribute("animation__flip", {
+              property: "rotation",
+              from: "0 180 0",
+              to: "360 540 0",
+              dur: 900,
+              easing: "easeInOutQuad"
+            });
+          };
+
+          this.el.addEventListener("click", flipCat);
+          this.el.addEventListener("touchstart", flipCat);
+        }
+      });
+
+    </script>
+  </head>
+
+  <body>
+      <a-scene
+        embedded
+        vr-mode-ui="enabled: false"
+        arjs="sourceType: webcam; debugUIEnabled: false"
+        renderer="antialias: true; colorManagement: true; precision: mediump"
+        device-orientation-permission-ui="enabled: false">
+      <a-assets>
+        <a-asset-item
+          id="catModel"
+          src="https://raw.githubusercontent.com/Craftsman3D/Craftsman3D.github.io/main/assets/text-to-3d/cute%20hyperrealistic%20futuristic%20soldier%20cat.glb">
+        </a-asset-item>
+        <a-asset-item
+          id="toyModel"
+          src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb">
+        </a-asset-item>
+      </a-assets>
+
+      <!-- ================= LAB EXERCISES: use the Hiro marker ================= -->
+      <a-marker preset="hiro">
+        <!-- Exercise 1 + 2: cube on marker, continuous RGB color, click/touch changes shape -->
+        <a-entity
+          id="labShape"
+          geometry="primitive: box; width: 0.8; height: 0.8; depth: 0.8"
+          material="color: red"
+          position="0 0.55 0"
+          rotation="0 45 0"
+          rgb-pulse
+          shape-cycle>
+        </a-entity>
+
+        <!-- Exercise 3: hosted GLB cat, orange color, smaller scale, raised position, faster spin -->
+        <a-gltf-model
+          id="labCat"
+          src="#catModel"
+          position="0.72 0.18 0"
+          scale="0.14 0.14 0.14"
+          rotation="0 180 0"
+          gltf-orange
+          animation="property: rotation; to: 0 540 0; loop: true; dur: 2000; easing: linear">
+        </a-gltf-model>
+
+        <a-text
+          value="LAB"
+          position="-0.75 0.05 -0.55"
+          rotation="-90 0 0"
+          align="center"
+          color="#ffffff"
+          width="2">
+        </a-text>
+      </a-marker>
+
+      <!-- ================= BONUS EXERCISE: use the Kanji marker ================= -->
+      <a-marker preset="kanji">
+        <!-- Cat: press/touch it to hear a meow -->
+        <a-gltf-model
+          id="bonusCat"
+          src="#catModel"
+          position="0 0.18 0"
+          scale="0.16 0.16 0.16"
+          rotation="0 180 0"
+          gltf-orange
+          meow-on-click>
+        </a-gltf-model>
+        <a-sphere
+          id="bonusCatHit"
+          position="0 0.36 0"
+          radius="0.34"
+          material="opacity: 0.01; transparent: true"
+          meow-on-click>
+        </a-sphere>
+
+        <!-- Water bowl -->
+        <a-cylinder
+          position="-0.55 0.06 0.25"
+          radius="0.22"
+          height="0.12"
+          color="#d9d9d9">
+        </a-cylinder>
+        <a-cylinder
+          position="-0.55 0.13 0.25"
+          radius="0.18"
+          height="0.03"
+          color="#3aa7ff"
+          opacity="0.85">
+        </a-cylinder>
+
+        <!-- Toy: press/touch it to make the bonus cat flip -->
+        <a-gltf-model
+          id="bonusToy"
+          src="#toyModel"
+          position="0.55 0.05 0.18"
+          scale="0.008 0.008 0.008"
+          rotation="0 -35 0"
+          toy-flips-cat="target: #bonusCat">
+        </a-gltf-model>
+        <a-sphere
+          id="bonusToyHit"
+          position="0.55 0.18 0.18"
+          radius="0.22"
+          material="opacity: 0.01; transparent: true"
+          toy-flips-cat="target: #bonusCat">
+        </a-sphere>
+
+        <a-plane
+          position="0 0.01 0"
+          rotation="-90 0 0"
+          width="1.7"
+          height="1.25"
+          color="#6fbf73"
+          opacity="0.55">
+        </a-plane>
+
+        <a-text
+          value="BONUS"
+          position="0 0.04 -0.52"
+          rotation="-90 0 0"
+          align="center"
+          color="#ffffff"
+          width="1.8">
+        </a-text>
+      </a-marker>
+
+      <!-- Camera with mouse/touch raycasting so the AR objects can be pressed -->
+      <a-entity
+        camera
+        cursor="rayOrigin: mouse"
+        raycaster="objects: #labShape, #bonusCat, #bonusToy, #bonusCatHit, #bonusToyHit">
+      </a-entity>
+    </a-scene>
+  </body>
+</html>
